@@ -1,0 +1,381 @@
+/* General Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f5f5f5;
+  color: #333;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 15px;
+}
+
+/* Header */
+header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+header h1 {
+  color: #2c3e50;
+  font-size: 2rem;
+  margin-bottom: 5px;
+}
+
+/* Capture Controls */
+.capture-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.status-indicator {
+  font-size: 0.9rem;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  color: #777;
+}
+
+.status-active {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-stopped {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+/* Network Map */
+.network-map-card {
+  margin-bottom: 20px;
+}
+
+.network-map {
+  height: 400px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #eee;
+  position: relative;
+}
+
+.view-controls {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.filter-select {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  font-size: 0.85rem;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 10px;
+  font-size: 0.85rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.node {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.node.local {
+  background-color: #3498db;
+}
+
+.node.remote {
+  background-color: #e74c3c;
+}
+
+.link-sample {
+  display: inline-block;
+  width: 20px;
+  height: 3px;
+}
+
+.link-sample.tcp {
+  background-color: #2ecc71;
+}
+
+.link-sample.udp {
+  background-color: #f39c12;
+}
+
+.link-sample.other {
+  background-color: #9b59b6;
+}
+
+/* SVG Network Map Styles */
+.network-node {
+  cursor: pointer;
+}
+
+.network-node:hover {
+  stroke: #000;
+  stroke-width: 2px;
+}
+
+.network-link {
+  stroke-opacity: 0.6;
+}
+
+.network-label {
+  font-family: "Segoe UI", sans-serif;
+  font-size: 10px;
+  pointer-events: none;
+  text-anchor: middle;
+}
+
+.tooltip {
+  position: absolute;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 10;
+  display: none;
+}
+
+/* Dashboard Layout */
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+@media (min-width: 768px) {
+  .dashboard {
+    flex-direction: row;
+  }
+}
+
+.main-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.side-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Cards */
+.card {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+.card h2 {
+  color: #2c3e50;
+  font-size: 1.2rem;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 5px;
+}
+
+/* Chart Containers */
+canvas#trafficChart,
+canvas#protocolChart {
+  max-height: 200px !important;
+  width: 100% !important;
+}
+
+/* Port List */
+.port-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.port-item {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.port-item:last-child {
+  border-bottom: none;
+}
+
+.port-item h3 {
+  font-size: 1rem;
+  margin-bottom: 5px;
+}
+
+.port-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  font-size: 0.8rem;
+}
+
+.port-alert-active {
+  background-color: #ffe6e6;
+}
+
+/* Alert Form */
+.alert-form {
+  padding: 8px 0;
+}
+
+.form-group {
+  margin-bottom: 10px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 3px;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+.btn-primary {
+  background-color: #3498db;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #2980b9;
+}
+
+.btn-success {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-success:hover {
+  background-color: #218838;
+}
+
+.btn-danger {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #c0392b;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Alert List */
+.alert-list {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.alert-item {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+  background-color: #fff8e1;
+  margin-bottom: 3px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.alert-time {
+  font-size: 0.7rem;
+  color: #777;
+}
+
+.alert-message {
+  font-weight: bold;
+}
+
+/* Packet Table */
+.packet-table-container {
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.packet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.packet-table th,
+.packet-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.packet-table th {
+  background-color: #f8f9fa;
+  position: sticky;
+  top: 0;
+  font-size: 0.85rem;
+}
+
+.packet-table tr:hover {
+  background-color: #f1f1f1;
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  color: #777;
+  padding: 15px;
+  font-size: 0.9rem;
+}

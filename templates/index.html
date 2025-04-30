@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Network Traffic Visualizer</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- D3.js for network visualization -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Network Traffic Visualizer</h1>
+        <div class="capture-controls">
+          <button id="startCaptureBtn" class="btn btn-success">
+            Start Capture
+          </button>
+          <button id="stopCaptureBtn" class="btn btn-danger" disabled>
+            Stop Capture
+          </button>
+          <span id="captureStatus" class="status-indicator">Stopped</span>
+        </div>
+      </header>
+
+      <!-- Network Map Card - New Addition -->
+      <div class="card network-map-card">
+        <h2>Network Connection Map</h2>
+        <div class="view-controls">
+          <button id="resetViewBtn" class="btn btn-sm">Reset View</button>
+          <select id="filterSelect" class="filter-select">
+            <option value="all">All Connections</option>
+            <option value="active">Active Connections</option>
+            <option value="local">Local Connections</option>
+          </select>
+        </div>
+        <div id="networkMap" class="network-map"></div>
+        <div class="map-legend">
+          <div class="legend-item">
+            <span class="node local"></span> Local Host
+          </div>
+          <div class="legend-item">
+            <span class="node remote"></span> Remote Host
+          </div>
+          <div class="legend-item">
+            <span class="link-sample tcp"></span> TCP
+          </div>
+          <div class="legend-item">
+            <span class="link-sample udp"></span> UDP
+          </div>
+          <div class="legend-item">
+            <span class="link-sample other"></span> Other
+          </div>
+        </div>
+      </div>
+
+      <div class="dashboard">
+        <div class="main-panel">
+          <div class="card">
+            <h2>Network Traffic</h2>
+            <canvas id="trafficChart"></canvas>
+          </div>
+
+          <div class="card">
+            <h2>Protocol Distribution</h2>
+            <canvas id="protocolChart"></canvas>
+          </div>
+        </div>
+
+        <div class="side-panel">
+          <div class="card">
+            <h2>Port Activity</h2>
+            <div class="port-list" id="portList">
+              <div class="loading">Loading port data...</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Set Port Alert</h2>
+            <div class="alert-form">
+              <div class="form-group">
+                <label for="alertPort">Port:</label>
+                <input
+                  type="number"
+                  id="alertPort"
+                  min="1"
+                  max="65535"
+                  placeholder="Port number"
+                />
+              </div>
+              <div class="form-group">
+                <label for="alertThreshold">Threshold (packets/sec):</label>
+                <input
+                  type="number"
+                  id="alertThreshold"
+                  min="1"
+                  placeholder="Packets per second"
+                />
+              </div>
+              <button id="setAlertBtn" class="btn btn-primary">
+                Set Alert
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Alert History</h2>
+            <div class="alert-list" id="alertList">
+              <div class="loading">No alerts yet</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Recent Packet Activity</h2>
+        <div class="packet-table-container">
+          <table class="packet-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Source</th>
+                <th>Destination</th>
+                <th>Protocol</th>
+                <th>Size</th>
+              </tr>
+            </thead>
+            <tbody id="packetTableBody">
+              <tr>
+                <td colspan="5" class="loading">Loading packet data...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/network-map.js') }}"></script>
+  </body>
+</html>

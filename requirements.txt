@@ -1,0 +1,4 @@
+flask==2.0.1
+scapy==2.4.5
+psutil==5.9.0
+matplotlib==3.5.1 
