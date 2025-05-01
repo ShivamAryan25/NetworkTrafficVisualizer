@@ -10,6 +10,10 @@ let height;
 let tooltip;
 let localIPAddresses = new Set();
 let activeConnections = new Map(); // Map of source-target pairs to track active connections
+let isProcessing = false; // Flag to prevent concurrent processing
+let packetQueue = []; // Queue to hold packets during processing
+let lastUpdateTime = 0; // Track last update time
+const UPDATE_INTERVAL = 1000; // Minimum time between updates in ms
 
 // Initialize the network map
 document.addEventListener("DOMContentLoaded", () => {
@@ -86,21 +90,68 @@ function initializeNetworkMap() {
 function updateNetworkMap(packets) {
   if (!svg) return; // Exit if SVG not initialized
 
-  // Get the current filter value
-  const filterType = document.getElementById("filterSelect").value;
+  // If we're already processing data, queue these packets for later
+  if (isProcessing) {
+    packetQueue = packetQueue.concat(packets);
+    return;
+  }
 
-  // Process packets to create nodes and links
-  processNetworkData(packets);
+  // Check if we need to throttle updates
+  const currentTime = Date.now();
+  if (currentTime - lastUpdateTime < UPDATE_INTERVAL) {
+    // Queue packets and schedule an update
+    packetQueue = packetQueue.concat(packets);
+    if (!isProcessing) {
+      setTimeout(() => {
+        const queuedPackets = [...packetQueue];
+        packetQueue = [];
+        updateNetworkMap(queuedPackets);
+      }, UPDATE_INTERVAL - (currentTime - lastUpdateTime));
+    }
+    return;
+  }
 
-  // Apply filtering based on current selection
-  const { filteredNodes, filteredLinks } = filterNetworkData(filterType);
+  // Mark as processing to prevent concurrent updates
+  isProcessing = true;
+  lastUpdateTime = currentTime;
 
-  // Update the visualization with the filtered data
-  updateVisualization(filteredNodes, filteredLinks);
+  // Process any queued packets along with the new ones
+  const allPackets = packetQueue.concat(packets);
+  packetQueue = [];
+
+  try {
+    // Get the current filter value
+    const filterType = document.getElementById("filterSelect").value;
+
+    // Process packets to create nodes and links
+    processNetworkData(allPackets);
+
+    // Apply filtering based on current selection
+    const { filteredNodes, filteredLinks } = filterNetworkData(filterType);
+
+    // Update the visualization with the filtered data
+    updateVisualization(filteredNodes, filteredLinks);
+  } catch (error) {
+    console.error("Error updating network map:", error);
+  } finally {
+    // Mark as no longer processing
+    isProcessing = false;
+
+    // If more packets arrived during processing, handle them
+    if (packetQueue.length > 0) {
+      setTimeout(() => {
+        const queuedPackets = [...packetQueue];
+        packetQueue = [];
+        updateNetworkMap(queuedPackets);
+      }, 0);
+    }
+  }
 }
 
 // Process network data from packets
 function processNetworkData(packets) {
+  if (!packets || packets.length === 0) return;
+
   // Get all unique hosts from packets
   const hosts = new Set();
   const connections = new Map();
@@ -110,45 +161,46 @@ function processNetworkData(packets) {
   updateLocalIPs();
 
   // Process each packet
-  packets.forEach((packet) => {
-    if (packet.src_ip && packet.dst_ip) {
-      // Add hosts to set
-      hosts.add(packet.src_ip);
-      hosts.add(packet.dst_ip);
+  for (let i = 0; i < packets.length; i++) {
+    const packet = packets[i];
+    if (!packet || !packet.src_ip || !packet.dst_ip) continue;
 
-      // Create connection ID
-      const connectionId = `${packet.src_ip}:${packet.src_port}-${packet.dst_ip}:${packet.dst_port}`;
-      const reverseId = `${packet.dst_ip}:${packet.dst_port}-${packet.src_ip}:${packet.src_port}`;
+    // Add hosts to set
+    hosts.add(packet.src_ip);
+    hosts.add(packet.dst_ip);
 
-      // Update active connections
-      newActiveConnections.set(connectionId, {
+    // Create connection ID
+    const connectionId = `${packet.src_ip}:${packet.src_port}-${packet.dst_ip}:${packet.dst_port}`;
+    const reverseId = `${packet.dst_ip}:${packet.dst_port}-${packet.src_ip}:${packet.src_port}`;
+
+    // Update active connections
+    newActiveConnections.set(connectionId, {
+      source: packet.src_ip,
+      target: packet.dst_ip,
+      sourcePort: packet.src_port,
+      targetPort: packet.dst_port,
+      protocol: packet.protocol,
+      flags: packet.flags,
+      lastSeen: Date.now(),
+    });
+
+    // Update connections for visualization
+    const linkId = `${packet.src_ip}-${packet.dst_ip}`;
+    if (!connections.has(linkId)) {
+      connections.set(linkId, {
         source: packet.src_ip,
         target: packet.dst_ip,
-        sourcePort: packet.src_port,
-        targetPort: packet.dst_port,
-        protocol: packet.protocol,
-        flags: packet.flags,
-        lastSeen: Date.now(),
+        protocols: new Set([packet.protocol]),
+        packets: 1,
+        bytes: packet.size || 0,
       });
-
-      // Update connections for visualization
-      const linkId = `${packet.src_ip}-${packet.dst_ip}`;
-      if (!connections.has(linkId)) {
-        connections.set(linkId, {
-          source: packet.src_ip,
-          target: packet.dst_ip,
-          protocols: new Set([packet.protocol]),
-          packets: 1,
-          bytes: packet.size,
-        });
-      } else {
-        const conn = connections.get(linkId);
-        conn.protocols.add(packet.protocol);
-        conn.packets++;
-        conn.bytes += packet.size;
-      }
+    } else {
+      const conn = connections.get(linkId);
+      conn.protocols.add(packet.protocol);
+      conn.packets++;
+      conn.bytes += packet.size || 0;
     }
-  });
+  }
 
   // Update active connections map (preserve connections seen in the last 30 seconds)
   const thirtySecondsAgo = Date.now() - 30000;
@@ -160,25 +212,55 @@ function processNetworkData(packets) {
   activeConnections = newActiveConnections;
 
   // Create or update nodes
-  networkNodes = Array.from(hosts).map((host) => {
+  const updatedNodes = [];
+  hosts.forEach((host) => {
     // Find existing node or create new one
     const existingNode = networkNodes.find((n) => n.id === host);
     const isLocal = localIPAddresses.has(host);
 
     if (existingNode) {
       existingNode.isLocal = isLocal;
-      return existingNode;
+      updatedNodes.push(existingNode);
     } else {
-      return {
+      updatedNodes.push({
         id: host,
         label: host,
         isLocal: isLocal,
-      };
+      });
     }
   });
 
+  // Keep nodes that aren't in the current batch but were seen recently
+  const recentTime = Date.now() - 60000; // Last minute
+  networkNodes.forEach((node) => {
+    if (!updatedNodes.some((n) => n.id === node.id)) {
+      // Check if this node has any active connections
+      let hasActiveConnection = false;
+      activeConnections.forEach((conn) => {
+        if (conn.source === node.id || conn.target === node.id) {
+          hasActiveConnection = true;
+        }
+      });
+
+      if (
+        hasActiveConnection ||
+        (node.lastSeen && node.lastSeen > recentTime)
+      ) {
+        updatedNodes.push(node);
+      }
+    }
+  });
+
+  // Update timestamps for all nodes in this batch
+  updatedNodes.forEach((node) => {
+    node.lastSeen = Date.now();
+  });
+
+  networkNodes = updatedNodes;
+
   // Create or update links
-  networkLinks = Array.from(connections.values()).map((conn) => {
+  const updatedLinks = [];
+  connections.forEach((conn, id) => {
     // Find existing link or create new one
     const existingLink = networkLinks.find(
       (l) =>
@@ -196,20 +278,41 @@ function processNetworkData(packets) {
     if (existingLink) {
       existingLink.protocols = protocols;
       existingLink.mainProtocol = mainProtocol;
-      existingLink.packets = conn.packets;
-      existingLink.bytes = conn.bytes;
-      return existingLink;
+      existingLink.packets += conn.packets;
+      existingLink.bytes += conn.bytes;
+      existingLink.lastSeen = Date.now();
+      updatedLinks.push(existingLink);
     } else {
-      return {
+      updatedLinks.push({
         source: conn.source,
         target: conn.target,
         protocols: protocols,
         mainProtocol: mainProtocol,
         packets: conn.packets,
         bytes: conn.bytes,
-      };
+        lastSeen: Date.now(),
+      });
     }
   });
+
+  // Keep links that aren't in the current batch but were seen recently
+  networkLinks.forEach((link) => {
+    const linkId =
+      typeof link.source === "object"
+        ? `${link.source.id}-${link.target.id}`
+        : `${link.source}-${link.target}`;
+
+    if (
+      !connections.has(linkId) &&
+      !connections.has(linkId.split("-").reverse().join("-"))
+    ) {
+      if (link.lastSeen && link.lastSeen > recentTime) {
+        updatedLinks.push(link);
+      }
+    }
+  });
+
+  networkLinks = updatedLinks;
 }
 
 // Apply filters to network data
@@ -272,6 +375,24 @@ function filterNetworkData(filterType) {
 
 // Update the visualization with new data
 function updateVisualization(nodes, links) {
+  // Limit the number of nodes to prevent performance issues
+  const MAX_NODES = 100;
+  if (nodes.length > MAX_NODES) {
+    // Sort by last seen and take the most recent
+    nodes.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+    nodes = nodes.slice(0, MAX_NODES);
+
+    // Filter links to only include the nodes we're keeping
+    const nodeIds = new Set(nodes.map((n) => n.id));
+    links = links.filter((link) => {
+      const sourceId =
+        typeof link.source === "object" ? link.source.id : link.source;
+      const targetId =
+        typeof link.target === "object" ? link.target.id : link.target;
+      return nodeIds.has(sourceId) && nodeIds.has(targetId);
+    });
+  }
+
   // Update links
   const link = svg
     .select(".links")
@@ -283,23 +404,32 @@ function updateVisualization(nodes, links) {
     });
 
   // Remove old links
-  link.exit().remove();
+  link.exit().transition().duration(300).attr("opacity", 0).remove();
 
   // Add new links
   const linkEnter = link
     .enter()
     .append("line")
     .attr("class", "network-link")
+    .attr("opacity", 0)
     .attr("stroke-width", (d) => Math.max(1, Math.min(5, Math.log(d.packets))));
 
   // Set link color based on protocol
   linkEnter
     .merge(link)
+    .transition()
+    .duration(300)
+    .attr("opacity", 1)
+    .attr("stroke-width", (d) => Math.max(1, Math.min(5, Math.log(d.packets))))
     .attr("stroke", (d) => {
       if (d.mainProtocol === "TCP") return "#2ecc71";
       if (d.mainProtocol === "UDP") return "#f39c12";
       return "#9b59b6";
-    })
+    });
+
+  // Add hover effect to links
+  linkEnter
+    .merge(link)
     .on("mouseover", function (event, d) {
       const sourceId = typeof d.source === "object" ? d.source.id : d.source;
       const targetId = typeof d.target === "object" ? d.target.id : d.target;
@@ -340,14 +470,14 @@ function updateVisualization(nodes, links) {
     .data(nodes, (d) => d.id);
 
   // Remove old nodes
-  node.exit().remove();
+  node.exit().transition().duration(300).attr("r", 0).remove();
 
   // Add new nodes
   const nodeEnter = node
     .enter()
     .append("circle")
     .attr("class", "network-node")
-    .attr("r", 10)
+    .attr("r", 0)
     .attr("fill", (d) => (d.isLocal ? "#3498db" : "#e74c3c"))
     .call(
       d3
@@ -355,7 +485,19 @@ function updateVisualization(nodes, links) {
         .on("start", dragstarted)
         .on("drag", dragged)
         .on("end", dragended)
-    )
+    );
+
+  // Animate nodes
+  nodeEnter
+    .merge(node)
+    .transition()
+    .duration(300)
+    .attr("r", 10)
+    .attr("fill", (d) => (d.isLocal ? "#3498db" : "#e74c3c"));
+
+  // Add hover effect to nodes
+  nodeEnter
+    .merge(node)
     .on("mouseover", function (event, d) {
       tooltip
         .style("display", "block")
@@ -390,20 +532,29 @@ function updateVisualization(nodes, links) {
     .data(nodes, (d) => d.id);
 
   // Remove old labels
-  label.exit().remove();
+  label.exit().transition().duration(300).attr("opacity", 0).remove();
 
   // Add new labels
   const labelEnter = label
     .enter()
     .append("text")
     .attr("class", "network-label")
+    .attr("opacity", 0)
     .text((d) => truncateIP(d.id))
     .attr("fill", "#333");
 
-  // Update simulation
+  // Animate labels
+  labelEnter
+    .merge(label)
+    .transition()
+    .duration(300)
+    .attr("opacity", 1)
+    .text((d) => truncateIP(d.id));
+
+  // Update simulation with fewer alpha steps for better performance
   simulation.nodes(nodes);
   simulation.force("link").links(links);
-  simulation.alpha(0.3).restart();
+  simulation.alpha(0.3).alphaDecay(0.0228).restart();
 }
 
 // Setup event listeners for network map controls
@@ -421,6 +572,19 @@ function setupNetworkMapControls() {
     const { filteredNodes, filteredLinks } = filterNetworkData(filterType);
     updateVisualization(filteredNodes, filteredLinks);
   });
+
+  // Add a performance mode toggle if needed
+  if (document.getElementById("performanceMode")) {
+    document
+      .getElementById("performanceMode")
+      .addEventListener("change", (e) => {
+        if (e.target.checked) {
+          UPDATE_INTERVAL = 2000; // Less frequent updates
+        } else {
+          UPDATE_INTERVAL = 1000; // More frequent updates
+        }
+      });
+  }
 }
 
 // Drag event handlers for nodes
@@ -447,7 +611,11 @@ function updateLocalIPs() {
   localIPAddresses.clear();
 
   // Add IPs from the server's detected local IPs list
-  if (networkData.local_ips && networkData.local_ips.length > 0) {
+  if (
+    networkData &&
+    networkData.local_ips &&
+    networkData.local_ips.length > 0
+  ) {
     networkData.local_ips.forEach((ip) => {
       localIPAddresses.add(ip);
     });
@@ -457,15 +625,17 @@ function updateLocalIPs() {
     localIPAddresses.add("::1");
     localIPAddresses.add("localhost");
 
-    // Check common private ranges
-    networkData.packets.forEach((packet) => {
-      if (packet.src_ip && isLocalIP(packet.src_ip)) {
-        localIPAddresses.add(packet.src_ip);
-      }
-      if (packet.dst_ip && isLocalIP(packet.dst_ip)) {
-        localIPAddresses.add(packet.dst_ip);
-      }
-    });
+    // Check common private ranges if networkData is available
+    if (networkData && networkData.packets) {
+      networkData.packets.forEach((packet) => {
+        if (packet.src_ip && isLocalIP(packet.src_ip)) {
+          localIPAddresses.add(packet.src_ip);
+        }
+        if (packet.dst_ip && isLocalIP(packet.dst_ip)) {
+          localIPAddresses.add(packet.dst_ip);
+        }
+      });
+    }
   }
 }
 
@@ -514,14 +684,61 @@ function truncateIP(ip) {
   return ip.substring(0, 8) + "...";
 }
 
-// Update network map when new data is available
+// Safely update network map when new data is available
 function updateNetworkMapData() {
-  updateNetworkMap(networkData.packets);
+  if (networkData && networkData.packets) {
+    try {
+      updateNetworkMap(networkData.packets);
+    } catch (error) {
+      console.error("Error updating network map:", error);
+    }
+  }
 }
 
 // Add the network map update to the updateUI function in main.js
 let originalUpdateUI = updateUI;
 updateUI = function () {
-  originalUpdateUI();
-  updateNetworkMapData();
+  try {
+    originalUpdateUI();
+  } catch (error) {
+    console.error("Error in original updateUI:", error);
+  }
+
+  try {
+    updateNetworkMapData();
+  } catch (error) {
+    console.error("Error in updateNetworkMapData:", error);
+  }
 };
+
+// Add window resize handler to adjust the visualization
+window.addEventListener(
+  "resize",
+  debounce(function () {
+    if (svg) {
+      const container = document.getElementById("networkMap");
+      width = container.clientWidth;
+      height = container.clientHeight;
+
+      svg.attr("width", width).attr("height", height);
+
+      if (simulation) {
+        simulation.force("center", d3.forceCenter(width / 2, height / 2));
+        simulation.alpha(0.3).restart();
+      }
+    }
+  }, 250)
+);
+
+// Debounce function to limit how often an event can fire
+function debounce(func, wait) {
+  let timeout;
+  return function () {
+    const context = this,
+      args = arguments;
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      func.apply(context, args);
+    }, wait);
+  };
+}
